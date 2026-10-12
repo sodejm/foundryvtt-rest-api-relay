@@ -38,6 +38,11 @@ func RegisterAPIRoutes(r chi.Router, mgr *ws.ClientManager, pending *ws.PendingR
 		r.Group(func(r chi.Router) {
 			r.Use(scope(model.ScopeEntityRead))
 			r.Get("/get", h(mgr, pending, entityGet))
+			r.Get("/api/actors", h(mgr, pending, actorsCollection))
+			r.Get("/api/actors/{id}", h(mgr, pending, actorsDetail))
+			r.Get("/api/items", h(mgr, pending, itemsCollection))
+			r.Get("/api/items/{id}", h(mgr, pending, itemsDetail))
+			r.Get("/api/world", h(mgr, pending, worldIdentity))
 		})
 
 		// Entity write

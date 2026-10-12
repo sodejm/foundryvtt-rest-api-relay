@@ -10,15 +10,17 @@ import (
 	"github.com/ThreeHats/foundryvtt-rest-api-relay/go-relay/internal/metrics"
 	"github.com/ThreeHats/foundryvtt-rest-api-relay/go-relay/internal/model"
 	"github.com/ThreeHats/foundryvtt-rest-api-relay/go-relay/internal/ws"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 )
 
 // APIRouteConfig defines how to create a standardized API route handler.
 type APIRouteConfig struct {
-	Type           string
-	RequiredParams []ParamDef
-	OptionalParams []ParamDef
-	Timeout        time.Duration // Default: 10s
+	RequireBoundUser bool
+	Type             string
+	RequiredParams   []ParamDef
+	OptionalParams   []ParamDef
+	Timeout          time.Duration // Default: 10s
 
 	// ValidateParams performs custom validation. Return error message or empty string.
 	ValidateParams func(params Params, r *http.Request) (map[string]interface{}, bool)
@@ -46,16 +48,16 @@ type RequestContext struct {
 
 // ScopedKeyInfo holds scoped key details from auth middleware.
 type ScopedKeyInfo struct {
-	ID              int64
-	KeyPrefix       string            // first 8 chars of the raw key, safe to log
-	ScopedClientID  string            // single allowed client; use ScopedClientIDs for multiple
-	ScopedClientIDs []string          // multi-client scoping
-	ScopedUserID    string            // userId applied to all clients; use ScopedUserIDs for per-client
-	ScopedUserIDs   map[string]string // per-client userId: clientId → userId
-	Scopes          []string          // parsed scope list (nil = no scopes, deny all)
-	MonthlyLimit      int64           // 0 when MonthlyLimitSet is false
-	MonthlyLimitSet   bool            // true if this key has a MonthlyLimit configured
-	RequestsThisMonth int             // snapshot from auth time; used for approach alerts
+	ID                int64
+	KeyPrefix         string            // first 8 chars of the raw key, safe to log
+	ScopedClientID    string            // single allowed client; use ScopedClientIDs for multiple
+	ScopedClientIDs   []string          // multi-client scoping
+	ScopedUserID      string            // userId applied to all clients; use ScopedUserIDs for per-client
+	ScopedUserIDs     map[string]string // per-client userId: clientId → userId
+	Scopes            []string          // parsed scope list (nil = no scopes, deny all)
+	MonthlyLimit      int64             // 0 when MonthlyLimitSet is false
+	MonthlyLimitSet   bool              // true if this key has a MonthlyLimit configured
+	RequestsThisMonth int               // snapshot from auth time; used for approach alerts
 }
 
 // HasScope returns true if this scoped key has the given scope.
@@ -143,6 +145,10 @@ func CreateAPIRoute(manager *ws.ClientManager, pending *ws.PendingRequests, cfg 
 
 		// Scoped key enforcement
 		reqCtx := GetRequestContext(r)
+		if cfg.RequireBoundUser && (reqCtx == nil || reqCtx.ScopedKey == nil || reqCtx.ScopedKey.ID <= 0 || !reqCtx.ScopedKey.HasScope(model.ScopeEntityRead)) {
+			WriteError(w, http.StatusForbidden, "CALLER_IDENTITY_REQUIRED")
+			return
+		}
 		if reqCtx != nil && reqCtx.ScopedKey != nil {
 			// Multi-client scoping: validate or auto-select allowed client
 			if len(reqCtx.ScopedKey.ScopedClientIDs) > 0 {
@@ -159,6 +165,10 @@ func CreateAPIRoute(manager *ws.ClientManager, pending *ws.PendingRequests, cfg 
 				// else: multiple allowed, none specified — fall through to auto-resolve
 				// which will be filtered below
 			} else if reqCtx.ScopedKey.ScopedClientID != "" {
+				if requested := params.GetString("clientId"); cfg.RequireBoundUser && requested != "" && requested != reqCtx.ScopedKey.ScopedClientID {
+					WriteError(w, http.StatusForbidden, "CLIENT_NOT_AUTHORIZED")
+					return
+				}
 				params["clientId"] = reqCtx.ScopedKey.ScopedClientID
 			}
 		}
@@ -283,8 +293,24 @@ func CreateAPIRoute(manager *ws.ClientManager, pending *ws.PendingRequests, cfg 
 			return
 		}
 
-		// Build request ID
-		requestID := fmt.Sprintf("%s_%d", cfg.Type, time.Now().UnixMilli())
+		boundUser := ""
+		if cfg.RequireBoundUser {
+			key := reqCtx.ScopedKey
+			if client.APIKey() != reqCtx.MasterAPIKey || !key.CanAccessClient(clientID) || (key.ScopedClientID != "" && len(key.ScopedClientIDs) == 0 && key.ScopedClientID != clientID) {
+				WriteError(w, http.StatusForbidden, "CLIENT_NOT_AUTHORIZED")
+				return
+			}
+			boundUser = key.ScopedUserID
+			if len(key.ScopedUserIDs) > 0 {
+				boundUser = key.ScopedUserIDs[clientID]
+			}
+			if boundUser == "" {
+				WriteError(w, http.StatusForbidden, "CALLER_IDENTITY_REQUIRED")
+				return
+			}
+		}
+		// Unique across concurrent callers and requests.
+		requestID := cfg.Type + "_" + uuid.NewString()
 
 		// Register pending request
 		responseCh := make(chan *ws.WSResponse, 1)
@@ -321,6 +347,10 @@ func CreateAPIRoute(manager *ws.ClientManager, pending *ws.PendingRequests, cfg 
 			}
 		}
 
+		if cfg.RequireBoundUser {
+			payload["userId"] = boundUser
+			payload["_caller"] = fmt.Sprintf("key:%d", reqCtx.ScopedKey.ID)
+		}
 		// Add type and requestId
 		payload["type"] = cfg.Type
 		payload["requestId"] = requestID

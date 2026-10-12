@@ -99,6 +99,11 @@ var AllScopes = []string{
 // Actions not listed here are denied by default — adding a new action
 // REQUIRES adding it to this map.
 var ActionToScopeRequired = map[string]string{
+	"actors": ScopeEntityRead,
+	"items": ScopeEntityRead,
+	"actors-detail": ScopeEntityRead,
+	"items-detail": ScopeEntityRead,
+	"world": ScopeEntityRead,
 	"get":              ScopeEntityRead,
 	"create":           ScopeEntityWrite,
 	"update":           ScopeEntityWrite,

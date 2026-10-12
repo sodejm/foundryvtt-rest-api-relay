@@ -11,6 +11,7 @@ import (
 
 // PendingRequestTypes lists all valid message types for the WS protocol.
 var PendingRequestTypes = map[string]bool{
+	"actors": true, "items": true, "actors-detail": true, "items-detail": true, "world": true,
 	"search": true, "entity": true, "structure": true, "contents": true,
 	"create": true, "update": true, "delete": true,
 	"rolls": true, "last-roll": true, "roll": true,
@@ -25,7 +26,7 @@ var PendingRequestTypes = map[string]bool{
 	"use-ability": true, "use-feature": true, "use-spell": true, "use-item": true,
 	"modify-experience": true, "add-item": true, "remove-item": true,
 	"get-folder": true, "create-folder": true, "delete-folder": true,
-	"players": true,
+	"players":   true,
 	"get-scene": true, "create-scene": true, "update-scene": true,
 	"delete-scene": true, "switch-scene": true,
 	"get-canvas-documents": true, "create-canvas-document": true,
@@ -35,11 +36,11 @@ var PendingRequestTypes = map[string]bool{
 	"ability-save": true, "ability-check": true, "death-save": true,
 	"get-effects": true, "add-effect": true, "remove-effect": true,
 	"get-status-effects": true,
-	"sheet-screenshot": true,
-	"move-token": true, "measure-distance": true,
+	"sheet-screenshot":   true,
+	"move-token":         true, "measure-distance": true,
 	"get-playlists": true, "playlist-play": true, "playlist-stop": true,
 	"playlist-next": true, "playlist-volume": true, "play-sound": true, "stop-sound": true,
-	"world-info": true,
+	"world-info":        true,
 	"get-concentration": true, "break-concentration": true, "concentration-save": true,
 	"equip-item": true, "attune-item": true, "transfer-currency": true,
 	"modify-currency": true, "prepare-spell": true,
@@ -219,4 +220,3 @@ func (p *PendingRequests) StartCleanupLoop(ctx interface{ Done() <-chan struct{}
 		}
 	}()
 }
-

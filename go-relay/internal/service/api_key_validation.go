@@ -14,10 +14,15 @@ import (
 // APIKeyValidationResult holds the result of API key validation.
 type APIKeyValidationResult struct {
 	Valid          bool
-	UserID         int64  // relay DB user ID; 0 if lookup failed
+	UserID         int64 // relay DB user ID; 0 if lookup failed
 	MasterAPIKey   string
 	ScopedClientID string
 	ScopedUserID   string
+
+	ScopedKeyID     int64
+	ScopedClientIDs []string
+	ScopedUserIDs   map[string]string
+	Scopes          []string
 }
 
 // ValidateAPIKeyDetailed validates an API key against the database.
@@ -62,11 +67,15 @@ func ValidateAPIKeyDetailed(ctx context.Context, db *database.DB, apiKey string)
 	// master key only exists in the registration/regeneration response and is
 	// never stored in the DB or accessible via lookup.
 	return &APIKeyValidationResult{
-		Valid:          true,
-		UserID:         parentUser.ID,
-		MasterAPIKey:   parentUser.APIKeyHash.String,
-		ScopedClientID: scopedKey.ScopedClientID.String,
-		ScopedUserID:   scopedKey.ScopedUserID.String,
+		Valid:           true,
+		UserID:          parentUser.ID,
+		MasterAPIKey:    parentUser.APIKeyHash.String,
+		ScopedClientID:  scopedKey.ScopedClientID.String,
+		ScopedUserID:    scopedKey.ScopedUserID.String,
+		ScopedKeyID:     scopedKey.ID,
+		ScopedClientIDs: scopedKey.GetScopedClientIDs(),
+		ScopedUserIDs:   scopedKey.GetScopedUserIDs(),
+		Scopes:          scopedKey.GetScopes(),
 	}
 }
 
@@ -144,11 +153,15 @@ func MakeWSValidateAPIKey(db *database.DB) func(token string) (*ws.APIKeyValidat
 	return func(token string) (*ws.APIKeyValidation, error) {
 		result := ValidateAPIKeyDetailed(context.Background(), db, token)
 		return &ws.APIKeyValidation{
-			Valid:          result.Valid,
-			UserID:         result.UserID,
-			MasterAPIKey:   result.MasterAPIKey,
-			ScopedClientID: result.ScopedClientID,
-			ScopedUserID:   result.ScopedUserID,
+			Valid:           result.Valid,
+			UserID:          result.UserID,
+			MasterAPIKey:    result.MasterAPIKey,
+			ScopedClientID:  result.ScopedClientID,
+			ScopedUserID:    result.ScopedUserID,
+			ScopedKeyID:     result.ScopedKeyID,
+			ScopedClientIDs: result.ScopedClientIDs,
+			ScopedUserIDs:   result.ScopedUserIDs,
+			Scopes:          result.Scopes,
 		}, nil
 	}
 }

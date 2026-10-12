@@ -21,11 +21,11 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const version = "3.4.1"
+const version = "3.4.2-mcp.1"
 
 func main() {
 	// Load .env file (silent fail if not found)
-	godotenv.Load()      // .env in current directory
+	godotenv.Load()          // .env in current directory
 	godotenv.Load("../.env") // .env in parent (worktree root)
 
 	// Graceful shutdown context — created early so background goroutines can respect it
@@ -151,8 +151,9 @@ func main() {
 
 	// Create and start HTTP server
 	srv := server.New(ctx, cfg, db, redisClient, version)
+	bindHost := os.Getenv("BIND_HOST")
 	httpServer := &http.Server{
-		Addr:         fmt.Sprintf(":%d", cfg.Port),
+		Addr:         net.JoinHostPort(bindHost, fmt.Sprint(cfg.Port)),
 		Handler:      srv.Router(),
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 600 * time.Second, // Long for SSE/file uploads
@@ -160,10 +161,12 @@ func main() {
 	}
 
 	go func() {
-		log.Info().Int("port", cfg.Port).Msg("Server listening on all interfaces (0.0.0.0)")
+		log.Info().Str("address", httpServer.Addr).Msg("Server listening")
 		log.Info().Str("url", fmt.Sprintf("http://localhost:%d", cfg.Port)).Msg("Local URL")
-		for _, ip := range lanIPs() {
-			log.Info().Str("url", fmt.Sprintf("http://%s:%d", ip, cfg.Port)).Msg("LAN URL (reachable from other devices on your network)")
+		if bindHost == "" {
+			for _, ip := range lanIPs() {
+				log.Info().Str("url", fmt.Sprintf("http://%s:%d", ip, cfg.Port)).Msg("LAN URL (reachable from other devices on your network)")
+			}
 		}
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatal().Err(err).Msg("Server failed")

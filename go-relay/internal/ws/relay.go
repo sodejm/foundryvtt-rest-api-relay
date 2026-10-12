@@ -146,6 +146,11 @@ type APIKeyValidation struct {
 	MasterAPIKey   string
 	ScopedClientID string
 	ScopedUserID   string
+
+	ScopedKeyID     int64
+	ScopedClientIDs []string
+	ScopedUserIDs   map[string]string
+	Scopes          []string
 }
 
 // relayValidateToken validates a token for the relay (Foundry module) connection.
