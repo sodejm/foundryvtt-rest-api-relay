@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
+	"slices"
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/rs/zerolog/log"
 )
@@ -33,19 +35,19 @@ type ClientAPIConfig struct {
 	TrackUsage              func(apiKey string) (bool, string)
 	// AutoStart attempts to start a headless session for a scoped key with stored credentials.
 	// Args: masterAPIKey, scopedClientID, scopedUserID. Returns the new clientID or empty string.
-	AutoStart      func(masterAPIKey, scopedClientID, scopedUserID string) string
-	SSEManager     SSEManagerInterface
-	InteractiveSessions  *InteractiveSessionManager
+	AutoStart           func(masterAPIKey, scopedClientID, scopedUserID string) string
+	SSEManager          SSEManagerInterface
+	InteractiveSessions *InteractiveSessionManager
 }
 
 // clientWSState tracks the state of a client API WebSocket connection.
 type clientWSState struct {
-	mu               sync.Mutex
-	apiKey           string
-	masterAPIKey     string
-	userID           int64  // relay DB user ID; 0 for connection-token auth or unknown
-	clientID         string
-	scopedUserID     string
+	mu                sync.Mutex
+	apiKey            string
+	masterAPIKey      string
+	userID            int64 // relay DB user ID; 0 for connection-token auth or unknown
+	clientID          string
+	scopedUserID      string
 	conn              *websocket.Conn
 	consumerID        string            // stable identity for interactive session cleanup
 	pendingRequestIDs map[string]string // internalID -> clientRequestID
@@ -70,7 +72,7 @@ func clientAPIValidateToken(cfg *ClientAPIConfig, token string) (matchKey string
 	// Fall back to API key validation
 	if cfg.ValidateAPIKey != nil {
 		validation, err = cfg.ValidateAPIKey(token)
-		if err != nil || !validation.Valid {
+		if err != nil || validation == nil || !validation.Valid {
 			return "", "", "", nil, fmt.Errorf("invalid API key")
 		}
 		matchKey = validation.MasterAPIKey
@@ -87,32 +89,35 @@ func clientAPIValidateToken(cfg *ClientAPIConfig, token string) (matchKey string
 // Returns the validated state fields or an error string suitable for HTTP response.
 // allowedIPs is non-empty only for connection token auth and must be checked by the caller.
 func clientAPIResolveAndValidate(manager *ClientManager, cfg *ClientAPIConfig, token, clientID string) (matchKey, allowedIPs, resolvedClientID, scopedUserID string, validation *APIKeyValidation, httpErr string, httpStatus int) {
-	truncatedToken := token
-	if len(truncatedToken) > 8 {
-		truncatedToken = truncatedToken[:8] + "..."
-	}
-
 	matchKey, allowedIPs, scopedUserID, validation, err := clientAPIValidateToken(cfg, token)
 	if err != nil {
-		log.Warn().Str("token", truncatedToken).Msg("WS /ws/api rejected: invalid API key")
+		log.Warn().Msg("WS /ws/api rejected: invalid API key")
 		return "", "", "", "", nil, "Invalid API key", http.StatusUnauthorized
 	}
 
-	truncatedMatchKey := matchKey
-	if len(truncatedMatchKey) > 8 {
-		truncatedMatchKey = truncatedMatchKey[:8] + "..."
-	}
-	log.Debug().Str("token", truncatedToken).Str("matchKey", truncatedMatchKey).Msg("WS API key validated")
+	log.Debug().Msg("WS API key validated")
 
 	// Apply scoped clientId constraint
-	if validation != nil && validation.ScopedClientID != "" {
+	if validation != nil && validation.ScopedClientID != "" && len(validation.ScopedClientIDs) == 0 {
+		if clientID != "" && clientID != validation.ScopedClientID {
+			return "", "", "", "", nil, "CLIENT_NOT_AUTHORIZED", http.StatusForbidden
+		}
 		clientID = validation.ScopedClientID
 	}
 
 	// Auto-resolve clientId
 	if clientID == "" {
 		clients := manager.GetConnectedClients(matchKey)
-		log.Debug().Str("matchKey", matchKey[:8]+"...").Int("connectedClients", len(clients)).Msg("WS auto-resolving clientId")
+		if validation != nil && len(validation.ScopedClientIDs) > 0 {
+			allowed := clients[:0]
+			for _, id := range clients {
+				if slices.Contains(validation.ScopedClientIDs, id) {
+					allowed = append(allowed, id)
+				}
+			}
+			clients = allowed
+		}
+		log.Debug().Int("connectedClients", len(clients)).Msg("WS auto-resolving clientId")
 		switch len(clients) {
 		case 1:
 			clientID = clients[0]
@@ -125,12 +130,16 @@ func clientAPIResolveAndValidate(manager *ClientManager, cfg *ClientAPIConfig, t
 					break
 				}
 			}
-			log.Warn().Str("matchKey", matchKey[:8]+"...").Msg("WS /ws/api rejected: no connected clients")
+			log.Warn().Msg("WS /ws/api rejected: no connected clients")
 			return "", "", "", "", nil, "No connected Foundry client found", http.StatusNotFound
 		default:
 			log.Warn().Int("count", len(clients)).Msg("WS /ws/api rejected: multiple clients")
 			return "", "", "", "", nil, "Multiple clients connected. Please specify clientId.", http.StatusBadRequest
 		}
+	}
+
+	if validation != nil && len(validation.ScopedClientIDs) > 0 && !slices.Contains(validation.ScopedClientIDs, clientID) {
+		return "", "", "", "", nil, "CLIENT_NOT_AUTHORIZED", http.StatusForbidden
 	}
 
 	// Verify client exists and belongs to this API key
@@ -162,11 +171,7 @@ func startClientWSPumps(conn *websocket.Conn, manager *ClientManager, pending *P
 		semaphore:         make(chan struct{}, 100),
 	}
 
-	kp := token
-	if len(kp) > 8 {
-		kp = kp[:8]
-	}
-	log.Info().Str("clientId", clientID).Int64("userId", userID).Str("keyPrefix", kp).Msg("Client WS connected")
+	log.Info().Str("clientId", clientID).Int64("userId", userID).Msg("Client WS connected")
 
 	// Send welcome
 	sendWSJSON(conn, map[string]interface{}{
@@ -198,11 +203,7 @@ func startClientWSPumps(conn *websocket.Conn, manager *ClientManager, pending *P
 			close(state.done)
 			conn.Close()
 			cleanupClientWSState(state, pending, cfg, manager)
-			dkp := state.apiKey
-			if len(dkp) > 8 {
-				dkp = dkp[:8]
-			}
-			log.Info().Str("clientId", clientID).Int64("userId", state.userID).Str("keyPrefix", dkp).Msg("Client WS disconnected")
+			log.Info().Str("clientId", clientID).Int64("userId", state.userID).Msg("Client WS disconnected")
 		}()
 
 		for {
@@ -377,8 +378,18 @@ func handleClientWSMessage(state *clientWSState, manager *ClientManager, pending
 		return
 	}
 
+	var caller *APIKeyValidation
+	if IsCollectionContract(msgType) {
+		if cfg.ValidateAPIKey != nil {
+			caller, _ = cfg.ValidateAPIKey(state.apiKey)
+		}
+		if _, err := BoundCollectionUser(caller, state.clientID, foundryClient.APIKey()); err != nil {
+			sendWSJSON(state.conn, map[string]interface{}{"type": msgType + "-result", "requestId": requestID, "error": err.Error()})
+			return
+		}
+	}
 	// Create internal request ID
-	internalID := fmt.Sprintf("ws_%s_%d_%s", msgType, time.Now().UnixMilli(), randomStr(6))
+	internalID := "ws_" + msgType + "_" + uuid.NewString()
 
 	// Register pending request with WS callback
 	responseCh := make(chan *WSResponse, 1)
@@ -396,7 +407,7 @@ func handleClientWSMessage(state *clientWSState, manager *ClientManager, pending
 	// Build payload
 	payload := make(map[string]interface{})
 	for k, v := range msg {
-		if k != "type" && k != "requestId" && k != "format" {
+		if k != "type" && k != "requestId" && k != "format" && (!IsCollectionContract(msgType) || (k != "userId" && k != "_caller" && k != "_scopes")) {
 			payload[k] = v
 		}
 	}
@@ -406,6 +417,14 @@ func handleClientWSMessage(state *clientWSState, manager *ClientManager, pending
 		payload["userId"] = state.scopedUserID
 	}
 
+	if caller != nil {
+		payload["userId"], _ = BoundCollectionUser(caller, state.clientID, foundryClient.APIKey())
+		payload["_caller"] = fmt.Sprintf("key:%d", caller.ScopedKeyID)
+		payload["_scopes"] = caller.Scopes
+		if filter, ok := payload["filterType"]; !ok || filter == nil {
+			payload["filterType"] = ""
+		}
+	}
 	payload["type"] = msgType
 	payload["requestId"] = internalID
 	if _, ok := payload["data"]; !ok {

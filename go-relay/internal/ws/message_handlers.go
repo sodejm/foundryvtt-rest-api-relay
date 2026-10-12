@@ -41,6 +41,11 @@ func RegisterMessageHandlers(manager *ClientManager, pending *PendingRequests, f
 				return
 			}
 
+			req, ok := pending.Load(requestID)
+			if !ok || req.Type != rt || req.ClientID != client.ID() {
+				return
+			}
+
 			// Determine status code
 			statusCode := 200
 			if _, hasError := data["error"]; hasError {
