@@ -1,0 +1,15 @@
+| internal/handler/test.go:15:2:15:51 | call to MethodFunc | This admin API route has a registration path without RequireAdmin middleware. |
+| internal/handler/test.go:16:2:16:30 | call to Get | This admin API route has a registration path without RequireAdmin middleware. |
+| internal/handler/test.go:18:2:18:59 | call to Get | This admin API route has a registration path without RequireAdmin middleware. |
+| internal/handler/test.go:20:57:20:84 | call to Get | This admin API route has a registration path without RequireAdmin middleware. |
+| internal/handler/test.go:34:4:34:62 | call to Get | This admin API route has a registration path without RequireAdmin middleware. |
+| internal/handler/test.go:36:4:36:50 | call to Post | This admin API route has a registration path without RequireAdmin middleware. |
+| internal/handler/test.go:37:4:37:39 | call to Get | This admin API route has a registration path without RequireAdmin middleware. |
+| internal/handler/test.go:38:4:38:36 | call to Get | This admin API route has a registration path without RequireAdmin middleware. |
+| internal/handler/test.go:56:5:56:40 | call to Get | This admin API route has a registration path without RequireAdmin middleware. |
+| internal/handler/test.go:59:4:59:58 | call to Get | This admin API route has a registration path without RequireAdmin middleware. |
+| internal/handler/test.go:66:5:66:44 | call to Get | This admin API route has a registration path without RequireAdmin middleware. |
+| internal/handler/test.go:69:5:69:30 | call to Get | This admin API route has a registration path without RequireAdmin middleware. |
+| internal/handler/test.go:73:5:73:49 | call to Get | This admin API route has a registration path without RequireAdmin middleware. |
+| internal/handler/test.go:82:2:82:24 | call to Get | This admin API route has a registration path without RequireAdmin middleware. |
+| internal/handler/test.go:99:2:99:24 | call to Get | This admin API route has a registration path without RequireAdmin middleware. |

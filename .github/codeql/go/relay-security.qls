@@ -1,0 +1,2 @@
+- description: Relay authorization invariants
+- query: RequireAdminRouterMiddleware.ql

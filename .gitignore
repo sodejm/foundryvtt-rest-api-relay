@@ -53,3 +53,8 @@ benchmark/results/*
 go-relay/data/relay.db
 go-relay/tmp/*
 data/*
+
+# CodeQL regression outputs
+.github/codeql/go/tests/**/*.actual
+.github/codeql/go/tests/**/*.testproj/
+.github/codeql/go/tests/**/*.testproj

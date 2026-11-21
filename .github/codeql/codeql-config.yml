@@ -1,0 +1,5 @@
+name: Extended security checks
+queries:
+  - uses: security-extended
+paths-ignore:
+  - .github/codeql/go/tests/**

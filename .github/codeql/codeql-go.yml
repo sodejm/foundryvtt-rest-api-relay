@@ -1,0 +1,6 @@
+name: Extended Go security and relay authorization
+queries:
+  - uses: security-extended
+  - uses: ./.github/codeql/go/relay-security.qls
+paths-ignore:
+  - .github/codeql/go/tests/**
