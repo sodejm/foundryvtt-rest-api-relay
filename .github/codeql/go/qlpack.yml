@@ -1,0 +1,7 @@
+name: threehats/relay-go-security
+version: 0.1.0
+dependencies:
+  codeql/go-all: 8.1.0
+defaultSuiteFile: relay-security.qls
+extractor: go
+tests: tests
