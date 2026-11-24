@@ -15,24 +15,22 @@
     "generate-typedoc": "docusaurus generate-typedoc"
   },
   "dependencies": {
-    "@docusaurus/core": "3.8.1",
-    "@docusaurus/module-type-aliases": "3.8.1",
-    "@docusaurus/preset-classic": "3.8.1",
-    "@docusaurus/theme-search-algolia": "3.8.1",
-    "@docusaurus/tsconfig": "3.8.1",
-    "@docusaurus/types": "3.8.1",
-    "@mdx-js/react": "^3.1.0",
+    "@docusaurus/core": "3.10.2",
+    "@docusaurus/module-type-aliases": "3.10.2",
+    "@docusaurus/preset-classic": "3.10.2",
+    "@docusaurus/theme-search-algolia": "3.10.2",
+    "@mdx-js/react": "^3.1.1",
     "clsx": "^2.1.1",
-    "prism-react-renderer": "^2.1.0",
-    "react": "^19.0.0",
-    "react-dom": "^19.1.1"
+    "prism-react-renderer": "^2.4.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
   },
   "devDependencies": {
-    "@docusaurus/tsconfig": "3.8.1",
-    "@docusaurus/types": "3.8.1",
-    "docusaurus-plugin-typedoc": "^1.4.2",
-    "typedoc": "^0.28.9",
-    "typedoc-plugin-markdown": "^4.8.0"
+    "@docusaurus/tsconfig": "3.10.2",
+    "@docusaurus/types": "3.10.2",
+    "docusaurus-plugin-typedoc": "^1.4.3",
+    "typedoc": "^0.28.20",
+    "typedoc-plugin-markdown": "^4.14.1"
   },
   "browserslist": {
     "production": [
@@ -49,13 +47,5 @@
   "engines": {
     "node": ">=18.0"
   },
-  "packageManager": "pnpm@10.33.2",
-  "pnpm": {
-    "overrides": {
-      "gray-matter>js-yaml": "3.14.1"
-    }
-  },
-  "overrides": {
-    "webpack": "5.88.2"
-  }
+  "packageManager": "pnpm@12.23.0"
 }

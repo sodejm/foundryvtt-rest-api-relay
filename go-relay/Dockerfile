@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # Go build stage
-FROM golang:1.26-alpine AS builder
+FROM golang:1.27.4-alpine AS builder
 
 RUN apk add --no-cache git ca-certificates
 
@@ -18,19 +18,18 @@ COPY go-relay/ .
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /relay ./cmd/server/
 
 # Frontend build stage (Astro)
-FROM node:22-alpine AS frontend
+FROM node:26.13.1-alpine AS frontend
 
 WORKDIR /frontend
 # Install deps before copying content so this layer is cached on content-only changes
-COPY frontend/package.json frontend/pnpm-lock.yaml ./
-RUN --mount=type=cache,target=/root/.cache/node/corepack \
-    --mount=type=cache,target=/root/.local/share/pnpm/store \
-    corepack enable && pnpm install --frozen-lockfile
+COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
+    npm install --global pnpm@12.23.0 && pnpm install --frozen-lockfile
 COPY frontend/ .
 RUN pnpm run build
 
 # Docs build stage (Docusaurus)
-FROM node:22-alpine AS docs
+FROM node:26.13.1-alpine AS docs
 
 ARG ALGOLIA_APP_ID
 ARG ALGOLIA_SEARCH_API_KEY
@@ -39,15 +38,13 @@ ARG ALGOLIA_INDEX_NAME
 WORKDIR /workspace
 
 # Install root deps first (provides tsx for example injection)
-COPY package.json pnpm-lock.yaml ./
-RUN --mount=type=cache,target=/root/.cache/node/corepack \
-    --mount=type=cache,target=/root/.local/share/pnpm/store \
-    corepack enable && pnpm install --frozen-lockfile --ignore-scripts
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
+    npm install --global pnpm@12.23.0 && pnpm install --frozen-lockfile --ignore-scripts
 
 # Install docs deps
-COPY docs/package.json docs/pnpm-lock.yaml docs/
-RUN --mount=type=cache,target=/root/.cache/node/corepack \
-    --mount=type=cache,target=/root/.local/share/pnpm/store \
+COPY docs/package.json docs/pnpm-lock.yaml docs/pnpm-workspace.yaml docs/
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
     cd docs && pnpm install --frozen-lockfile
 
 # Copy content after deps so content changes don't bust the install cache
@@ -69,7 +66,7 @@ FROM ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install Node.js 22 (NodeSource) and Google Chrome.
+# Install Node.js 26 (NodeSource) and Google Chrome.
 # Google Chrome is used over Chromium for better GPU driver integration.
 # gosu: lightweight privilege-drop (replaces Alpine's su-exec).
 # libvulkan1 + mesa-vulkan-drivers: Vulkan ICD (llvmpipe) for headless WebGL fallback.
@@ -77,7 +74,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 # libgl1-mesa-dri + libegl-mesa0: Mesa OpenGL/EGL for non-NVIDIA GL rendering via Xvfb.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates curl gnupg \
-    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && curl -fsSL https://deb.nodesource.com/setup_26.x | bash - \
     && curl -fsSL https://dl.google.com/linux/linux_signing_key.pub \
        | gpg --dearmor -o /usr/share/keyrings/google-chrome-keyring.gpg \
     && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome-keyring.gpg] http://dl.google.com/linux/chrome/deb/ stable main" \
@@ -96,7 +93,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libglu1-mesa \
     gosu \
     && rm -rf /var/lib/apt/lists/* \
-    && corepack enable && corepack prepare pnpm@latest --activate
+    && npm install --global pnpm@12.23.0
 
 # Create non-root user (entrypoint drops to this user via gosu)
 RUN useradd -m -u 1001 appuser
